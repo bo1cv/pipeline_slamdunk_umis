@@ -1,0 +1,37 @@
+################################
+# slamdunk options
+################################
+# genome to be used
+genome: hg38_noalt
+
+# location of indexed genome, needs to be set
+genome_dir: /shared/sudlab1/General/mirror/genomes/index
+
+# provide a bed file of 3'UTR, it should be in the input directory or provide a full path
+bed_file_dir: /shared/sudlab1/General/projects/SynthUTR_hepG2_a549/hg38noalt_all_three_prime_utr2.bed
+
+# specify number of threads to be used
+number_of_threads: 13
+
+# -nm: Maximum number of mismatches allowed in a read
+# A minimum of 50% of the read bases mapped is recommended (depends on reads length)
+nm_mismatch: 38
+
+# -5: Number of bp removed from 5' end of all reads (default 12)
+5_trimming: 12
+
+# -rl: Maximum read length
+max_read_length: 76
+
+# -n Max. number of alignments to report per read
+max_alignments_per_read: 100
+
+################################
+# RNA half life curve fitting
+################################
+# expression threshold, CPM cutoff
+cpm_threshold: 5
+
+# Specify if the experiment includes a condition without 4SU for background substraction: 1 - yes, 0 - no
+#control samples must be named xxx-no4su-xxx
+background: 0
