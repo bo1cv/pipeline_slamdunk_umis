@@ -98,6 +98,13 @@ def umi_extract(infile, outfile):
           job_memory="4G")
 
 def make_conf(outfile, list_samples, pattern):
+    '''Creates the slamdunk sample file.
+    The sample file has four columns:
+    1. Filename
+    2. Sample name. This is currently the filename with the .fastq.gz removed
+    3. is "chase"
+    4. time point in minutes. This is retreived from the file anme assuming [A-Za-z]-(.+)h-R[0-9]'''
+    
     with open(outfile, 'w', newline='') as f_output:
         tsv_output = csv.writer(f_output, delimiter='\t')
         for i in list_samples:
@@ -116,27 +123,36 @@ def make_config_file(outfile):
 
 
 
-@follows(make_config_file,mkdir("map"))
-@split("sample_description.tsv",
-       ["map/{}_slamdunk_mapped.bam".format(sample) for sample in (glob.glob('{}*.fastq.gz'.format("*processed.fastq.gz"))) ])
+@follows(mkdir("map"))
+@split([make_config_file, umi_extract],
+       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".fastq.gz"))
+        for sample in glob.glob('*processed.fastq.gz')])
 def slamdunk_map(infiles, outfiles):
     '''slamdunk map dunk'''
-    genome_file = os.path.abspath(os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
+    
+    infiles = infiles[0]
+    genome_file = os.path.abspath(
+        os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
     bed_file = PARAMS["bed_file_dir"]
     n_threads = PARAMS["number_of_threads"]
     five_trimming = PARAMS["5_trimming"]
     multi_ali = PARAMS["max_alignments_per_read"]
     out_dir = os.getcwd()
-    job_memory="4G"
+    job_memory = "4G"
     statement = '''
-    slamdunk map -r %(genome_file)s -o %(out_dir)s -5 %(five_trimming)s -n %(multi_ali)s -t %(n_threads)s --skip-sam %(infiles)s
+    slamdunk map -r %(genome_file)s 
+                 -o %(out_dir)s 
+                 -5 %(five_trimming)s 
+                 -n %(multi_ali)s 
+                 -t %(n_threads)s 
+                 --skip-sam %(infiles)s
     '''
     P.run(statement,
           job_memory="4G",
           job_threads=n_threads)
 
-@follows(slamdunk_map,mkdir("filter"))
-@transform("map/*_slamdunk_mapped.bam",
+@follows(mkdir("filter"))
+@transform(slamdunk_map,
            regex("map/(.+)_slamdunk_mapped.bam"),
            r"filter/\1_slamdunk_mapped_filtered.bam")
 def slamdunk_filter(infiles, outfiles):
@@ -147,50 +163,60 @@ def slamdunk_filter(infiles, outfiles):
     out_dir = os.getcwd()+"/filter"
     job_memory="4G"
     statement = '''
-    slamdunk filter -b %(bed_file)s -o %(out_dir)s -t %(n_threads)s -nm %(mismatch)s %(infiles)s
+    slamdunk filter -b %(bed_file)s 
+                    -o %(out_dir)s 
+                    -t %(n_threads)s 
+                    -nm %(mismatch)s 
+                    %(infiles)s
     '''
     P.run(statement,
           job_memory="4G",
           job_threads=n_threads)
 
-@follows(slamdunk_filter,mkdir("snp"))
-@transform("filter/*_filtered.bam",
+@follows(mkdir("snp"))
+@transform(slamdunk_filter,
            regex("map/(.+).bam"),
            r"snp/\1_snp.vcf")
 def slamdunk_snp(infiles, outfiles):
     '''slamdunk snp dunk'''
-    genome_file = os.path.abspath(os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
+    genome_file = os.path.abspath(
+        os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
     n_threads = PARAMS["number_of_threads"]
     out_dir = os.getcwd()+"/snp"
     job_memory="4G"
     statement = '''
-    slamdunk snp -r %(genome_file)s -o %(out_dir)s -t %(n_threads)s %(infiles)s
+    slamdunk snp -r %(genome_file)s 
+                 -o %(out_dir)s 
+                 -t %(n_threads)s 
+                 %(infiles)s
     '''
     P.run(statement,
           job_memory="4G",
           job_threads=n_threads)
 
-@follows(slamdunk_snp)
-@transform("filter/*_slamdunk_mapped_filtered.bam",
+@transform(slamdunk_filter,
            regex("filter/(.+).bam"),
            r"filter/\1_dedup.bam")
 def umi_dedup(infile, outfile):
-    '''moves the UMI from the read to the read name'''
+    '''Deduplicates the BAM file using the UMI and position'''
     log_file = P.snip(outfile, ".bam")
     job_memory="4G"
     statement = '''
-    umi_tools dedup -I %(infile)s --output-stats=%(log_file)s -S %(outfile)s
+    umi_tools dedup -I %(infile)s 
+                    -S %(outfile)s 
+                    -L %(log_file)s
     '''
     P.run(statement,
           job_memory="4G")
 
-@follows(umi_dedup,mkdir("count"))
-@transform("filter/*_dedup.bam",
+@follows(slamdunk_snp, mkdir("count"))
+@transform(umi_dedup,
            regex("map/(.+).bam"),
            r"count/\1_tcount.tsv")
 def slamdunk_count(infiles, outfiles):
     '''slamdunk count dunk'''
-    genome_file = os.path.abspath(os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
+    genome_file = os.path.abspath(
+        os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
     n_threads = PARAMS["number_of_threads"]
     bed_file = PARAMS["bed_file_dir"]
     rl = PARAMS["max_read_length"]
@@ -198,53 +224,74 @@ def slamdunk_count(infiles, outfiles):
     snp_dir = str.join(os.getcwd(), "/snp")
     job_memory="4G"
     statement = '''
-    slamdunk count -r %(genome_file)s -b %(bed_file)s  -o %(out_dir)s -s %(snp_dir)s -m -l %(rl)s -t %(n_threads)s %(infiles)s
+    slamdunk count -r %(genome_file)s 
+                   -b %(bed_file)s  
+                   -o %(out_dir)s 
+                   -s %(snp_dir)s 
+                   -m 
+                   -l %(rl)s 
+                   -t %(n_threads)s 
+                   %(infiles)s
     '''
     P.run(statement,
           job_memory="4G",
           job_threads=n_threads)
 
-@follows(slamdunk_count)
-@collate("count/*.tsv",
+
+@collate(slamdunk_count,
          regex("count/(.+)-(R.).+tsv"),
          r"count/\1-aggConvRate.tsv")
 def merge_ConversionRate(infiles, outfile):
-    '''Aggregate Conversion Rate of replicates'''
+    '''Aggregate Conversion Rate of replicates into a single table'''
     infiles = str.join(" ", infiles)
-    statement="cgat combine_tables %(infiles)s -S %(outfile)s -c 1,2,3,4,5,6 -k 7 --regex-filename='.+-(R[0-9]).+tsv' --use-file-prefix"
+    statement='''cgat combine_tables %(infiles)s
+                    -S %(outfile)s -c 1,2,3,4,5,6 
+                    -k 7 
+                    --regex-filename='.+-(R[0-9]).+tsv' 
+                    --use-file-prefix'''
     P.run(statement)
 
-@follows(slamdunk_count)
-@collate("count/*.tsv",
+
+@collate(slamdunk_count,
          regex("count/(.+)-(R.).+tsv"),
          r"count/\1-aggReadsCPM.tsv")
 def merge_CPM(infiles, outfile):
     '''Aggregate ReadsCPM of replicates'''
     infiles = str.join(" ", infiles)
-    statement="cgat combine_tables %(infiles)s -S %(outfile)s -c 1,2,3,4,5,6 -k 8 --regex-filename='.+-(R[0-9]).+tsv' --use-file-prefix"
+    statement='''cgat combine_tables 
+                     %(infiles)s 
+                     -S %(outfile)s 
+                     -c 1,2,3,4,5,6 
+                     -k 8 
+                     --regex-filename='.+-(R[0-9]).+tsv' 
+                     --use-file-prefix'''
     P.run(statement)
 
-@follows(merge_ConversionRate,merge_CPM, mkdir("rates"))
-@transform("filter/*.bam",
+@follows(mkdir("rates"))
+@transform(slamdunk_filter,
            regex("filter/(.+).bam"),
            r"rates/\1_overallrates.csv")
 def slamdunk_qc_rates(infiles,outfiles):
     '''Computes the overall conversion rates in your reads and plots them as a barplot'''
-    genome_file = os.path.abspath(os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
+    genome_file = os.path.abspath(
+        os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
     bed_file = PARAMS["bed_file_dir"]
     outfiles = os.path.dirname(os.path.abspath(outfiles))
     n_threads = PARAMS["number_of_threads"]
     job_memory="4G"
     statement = '''
-    alleyoop rates -o %(outfiles)s -r %(genome_file)s -t %(n_threads)s %(infiles)s
+    alleyoop rates -o %(outfiles)s 
+                   -r %(genome_file)s 
+                   -t %(n_threads)s 
+                   %(infiles)s
     '''
     P.run(statement,
           job_memory="2G",
           job_threads=n_threads)
 
 
-@follows(slamdunk_qc_rates, mkdir("utrrates"))
-@transform("filter/*.bam",
+@follows(mkdir("utrrates"))
+@transform(slamdunk_filter,
            regex("filter/(.+).bam"),
            r"utrrates/\1_mutationrates_utr.csv")
 def slamdunk_qc_utrrates(infiles,outfiles):
@@ -261,8 +308,8 @@ def slamdunk_qc_utrrates(infiles,outfiles):
           job_memory="2G",
           job_threads=n_threads)
 
-@follows(slamdunk_qc_utrrates)
-@transform("filter/*bam",
+
+@transform(slamdunk_filter,
             suffix(".bam"),
             r"_summary.tsv")
 def slamdunk_summary(infile,outfile):
@@ -272,29 +319,35 @@ def slamdunk_summary(infile,outfile):
     '''
     P.run(statement)
 
-@follows(slamdunk_summary)
-@transform("count/*0h-aggConvRate.tsv",
-            regex("count/(.+)-0h-aggConvRate.tsv"),
-            r"\1_halflife.tsv")
+
+@merge(slamdunk_count,
+       r"halflife.tsv")
 def run_curvefit(infile, outfile):
     '''From count files, computes half lifes'''
     cdir = os.path.dirname(os.path.abspath(infile))
     threshold = PARAMS["cpm_threshold"]
     bg_sub = PARAMS["background"]
-    statement = '''Rscript ~/Rscripts/slampy_seprep_withbed.R --count-directory %(cdir)s  --cpm--threshold %(threshold)s --background %(bg_sub)s'''
+    script_path = os.path.join(os.dirname(os.abspath(__file__)), 
+                               "Rscripts",
+                               "slampy_seprep_withbed.R")
+    statement = '''Rscript %(script_path)s
+                         --count-directory %(cdir)s  
+                         --cpm--threshold %(threshold)s 
+                         --background %(bg_sub)s'''
     P.run(statement)
 
-@follows(mkdir("meme.dir"), run_curvefit)
-@transform("count/*.bed",
-           regex("count/(.+).bed"),
-           r"meme.dir/\1.fasta")
-def getfasta(infile, outfile):
-    '''From most and less stable bed file, get sequences and generate fasta for streme'''
-    genome_file = os.path.abspath(os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
-    statement = '''
-    cat %(infile)s | cgat bed2fasta -L bed2fasta.log --genome-file %(genome_file)s > %(outfile)s
-    '''
-    P.run(statement)
+
+# @follows(mkdir("meme.dir"), run_curvefit)
+# @transform("count/*.bed",
+#            regex("count/(.+).bed"),
+#            r"meme.dir/\1.fasta")
+# def getfasta(infile, outfile):
+#     '''From most and less stable bed file, get sequences and generate fasta for streme'''
+#     genome_file = os.path.abspath(os.path.join(PARAMS["genome_dir"], PARAMS["genome"] + ".fa"))
+#     statement = '''
+#     cat %(infile)s | cgat bed2fasta -L bed2fasta.log --genome-file %(genome_file)s > %(outfile)s
+#     '''
+#     P.run(statement)
 
 # @follows(getfasta)
 # @transform("meme.dir/*.fasta",
@@ -310,7 +363,7 @@ def getfasta(infile, outfile):
 #     job_memory="4G",
 #     job_threads=2)
 
-@follows(make_config_file,slamdunk_count,merge_ConversionRate,merge_CPM,slamdunk_qc_rates,slamdunk_qc_utrrates,slamdunk_summary,run_curvefit)
+@follows(merge_ConversionRate,merge_CPM,slamdunk_qc_rates,slamdunk_qc_utrrates,slamdunk_summary,run_curvefit)
 def full():
     '''Later alligator'''
     pass
