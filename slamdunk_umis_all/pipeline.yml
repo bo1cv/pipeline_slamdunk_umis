@@ -10,8 +10,11 @@ genome_dir: /shared/sudlab1/General/mirror/genomes/index
 # provide a bed file of 3'UTR, it should be in the input directory or provide a full path
 bed_file_dir: /shared/sudlab1/General/projects/SynthUTR_hepG2_a549/hg38noalt_all_three_prime_utr2.bed
 
-# specify number of threads to be used
+# specify number of threads to be used for mapping (recommend one threads per sample +1)
 number_of_threads: 13
+
+# specify memory
+memory: 4G
 
 # -nm: Maximum number of mismatches allowed in a read
 # A minimum of 50% of the read bases mapped is recommended (depends on reads length)
