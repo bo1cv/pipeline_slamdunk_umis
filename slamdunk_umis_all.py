@@ -157,7 +157,8 @@ def make_conf(outfile, list_samples, pattern):
                 tsv_output.writerow((i, i[:-6], "chase", 0))
             else:
                 tsv_output.writerow((i, i[:-6], "chase", float(samples_grouping.groups()[0]) * 60))
-
+                
+@follows(umi_extract)
 @originate("sample_description.tsv")
 def make_config_file(outfile):
     '''Takes the reads input names and outputs them to a tsv of filenames for slamdunk dunks'''
@@ -168,8 +169,7 @@ def make_config_file(outfile):
 
 @follows(mkdir("map"))
 @split([make_config_file,umi_extract],
-       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".fastq"))
-       for sample in glob.glob('*processed.fastq')])
+       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".fastq")) for sample in glob.glob('*processed.fastq')])
 def slamdunk_map(infiles, outfiles):
     '''slamdunk map dunk'''
     infiles = infiles[0]
