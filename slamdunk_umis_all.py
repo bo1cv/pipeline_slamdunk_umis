@@ -164,7 +164,7 @@ def make_conf(outfile, list_samples, pattern):
 @originate("sample_description.tsv")
 def make_config_file(outfile):
     '''Takes the reads input names and outputs them to a tsv of filenames for slamdunk dunks'''
-    list_samples = glob.glob('*_{}'.format("*processed.fastq"))
+    list_samples = glob.glob('*_processed.fastq')
     pattern = "trimmed-[A-Za-z0-9]+-(.+)h-R[0-9]_processed.fastq"
     make_conf(outfile, list_samples, pattern)
 
