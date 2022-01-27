@@ -127,6 +127,8 @@ PARAMS = P.get_parameters(
      "pipeline.yml"])
 ########################
 
+SAMPLES = [P.snip(f, "fastq.gz") for f in glob.glob("*.fastq.gz")]
+
 @transform("*.fastq.gz",
            regex("(.+).fastq.gz"),
            r"\1_processed.fastq")
@@ -169,7 +171,7 @@ def make_config_file(outfile):
 
 @follows(mkdir("map"))
 @split([make_config_file,umi_extract],
-       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".fastq")) for sample in glob.glob('*processed.fastq')])
+       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".fastq")) for sample in SAMPLES])
 def slamdunk_map(infiles, outfiles):
     '''slamdunk map dunk'''
     infiles = infiles[0]
