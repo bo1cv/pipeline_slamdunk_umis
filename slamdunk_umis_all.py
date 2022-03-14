@@ -92,10 +92,12 @@ The pipeline outputs the different files/directories
             half-life were not filtered meaning abberant half-life are present
         - model_fitting_summary.txt : summary of half-life below 0h or above
             the max time-point
+        - bootstrap_halflife.tsv : bootstrapped half-lifes (iteration = 1000)
+            
+      It will maybe later output 
         - halflife_filtered.tsv : filtered half-life (to be determined)
             half life betweem -1 and 0 are replace by 0
             haf life above 50h are filtered out
-        - bootstrap_halflife.tsv : bootstrapped half-lifes (iteration = 100)
         - .......
 
 See each function for an explanation of each job ran
@@ -127,7 +129,7 @@ PARAMS = P.get_parameters(
      "pipeline.yml"])
 ########################
 
-SAMPLES = [P.snip(f, "fastq.gz") for f in glob.glob("*.fastq.gz")]
+SAMPLES = [P.snip(f, ".fastq.gz") for f in glob.glob("*.fastq.gz")]
 
 @transform("*.fastq.gz",
            regex("(.+).fastq.gz"),
@@ -159,7 +161,7 @@ def make_conf(outfile, list_samples, pattern):
                 tsv_output.writerow((i, i[:-6], "chase", 0))
             else:
                 tsv_output.writerow((i, i[:-6], "chase", float(samples_grouping.groups()[0]) * 60))
-                
+
 @follows(umi_extract)
 @originate("sample_description.tsv")
 def make_config_file(outfile):
@@ -171,7 +173,7 @@ def make_config_file(outfile):
 
 @follows(mkdir("map"))
 @split([make_config_file,umi_extract],
-       ["map/{}_slamdunk_mapped.bam".format(sample) for sample in SAMPLES])
+       ["map/{}_processed_slamdunk_mapped.bam".format(P.snip(sample, ".fastq.gz")) for sample in glob.glob("*.fastq.gz")])
 def slamdunk_map(infiles, outfiles):
     '''slamdunk map dunk'''
     infiles = infiles[0]

@@ -4,7 +4,7 @@
 # genome to be used
 genome: hg38_noalt
 
-# location of indexed genome, needs to be set
+# location of genome, needs to be set (indexing will be done with slamdunk map)
 genome_dir: /shared/sudlab1/General/mirror/genomes/index
 
 # provide a bed file of 3'UTR, it should be in the input directory or provide a full path
