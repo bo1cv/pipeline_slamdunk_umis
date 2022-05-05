@@ -39,15 +39,24 @@
            "xxx_slamdunk_mapped_filtered_dedup_tcount_mins.bedgraph" and
            "xxx_slamdunk_mapped_filtered_dedup_tcount_plus.bedgraph"
        - cgat combine_tables  "xxx-aggConvRate.tsv" and "xxx-agg-ReadsCPM.tsv"
-   * halflife directory contains output of Rscript slampy_halflife_bed
+   * halflife directories contains output of Rscripts
        - ConvRate_processed.tsv : Conversion Rates table of each sample and
-       replicate, normalized to time-point 0h and background substracted
-       when no4su samples are provided
+           replicate, normalized to time-point 0h and background substracted
+           when no4su samples are provided
        - halflife_unfiltered.csv : selected halflife between the 3 models
-       half-life were not filtered meaning abberant half-life are present
+           half-life were not filtered meaning abberant half-life are present
+           OR here only model 1 hal-lifes
        - model_fitting_summary.txt : summary of half-life below 0h or above
-       the max time-point
+           the max time-point
+           OR NOT if only model 1
+       - models_halflife_decay_aic.tsv: result of all models if 3 models,
+           nothing if only model 1
        - bootstrap_halflife.tsv : bootstrapped half-lifes (iteration = 1000)
+       - halflife_percentileCIs.tsv : Pencentile CI calculated on bootstrapped
+           half-lifes, wth other stats like mean and median
+       - halflife_filtered.tsv : filtered half-lifes for h-l that were out
+       of the bs CI, < 0h or > 24h
+       - halflife_filtered.log : number of transcripts filtered
 
 ## Requirements
 
@@ -63,6 +72,8 @@ On top of the default CGAT setup, the pipeline requires the following
    - matrixStats
    - tidyverse
    - stringr
+   - foreach
+   - doParallel
 
 ## Configuration
 The pipeline requires a configured :file: `pipeline.yml` file.
@@ -76,3 +87,16 @@ Modify the pipeline.yml according to your project (specify annotation database a
 Run the pipeline with `python [path_to_repo]/pipeline_slamdunk_umis.py make full -v5`.
 
 For running the pipeline on a large set of samples, submit the pipeline onto the cluster (sharc), using a submit_pipeline custom script.
+
+## P.S
+/!\/!\Only model 1 included in pipeline/!\/!\
+The Rscript directory contains 4 scripts to calculate h-l from conversion rates.
+all rep aboceCPM: model(s) are given T>C Conversion rates of transcripts
+with a CPM above threshold in all replicates of each time point.
+2rep aboveCPM: model(s) were given model(s) are given T>C Conversion rates of
+transcripts with a CPM above threshold in at least 2 replicates of each time points
+
+3model: Rscript with the 3 models: these scripts are not included in the pipeline,
+but I kept the code in case.
+
+model1: Rscript with only model 1.

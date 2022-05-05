@@ -7,8 +7,6 @@ Overview
 
 This pipeline computes conversion Rate from fastq SLAM-seq data
 
-/!\ This piepeine is still prone to modifications
-
 files :file:``pipeline.yml` and :file:`conf.py`.
 
 Usage
@@ -58,6 +56,8 @@ Required R modules:
    - matrixStats
    - tidyverse
    - stringr
+   - foreach
+   - doParallel
 
 Pipeline output
 ===============
@@ -65,7 +65,7 @@ Pipeline output
 The pipeline outputs the different files/directories
     * sample_description.tsv file with sample names and time points asked by
         slamdunk_all
-    * xxx_processed.fastq files : ouputs of the umi tools extract
+    * xxx_processed.fastq.gz files : ouputs of the umi tools extract
     * map directory : contains outputs from slamdunk map
         "xxx_slamdunk_mapped.bam" and  .log
     * filter directory : contains output from
@@ -84,21 +84,24 @@ The pipeline outputs the different files/directories
                 "xxx_slamdunk_mapped_filtered_dedup_tcount_mins.bedgraph" and
                 "xxx_slamdunk_mapped_filtered_dedup_tcount_plus.bedgraph"
         - cgat combine_tables  "xxx-aggConvRate.tsv" and "xxx-agg-ReadsCPM.tsv"
-    * halflife directory contains output of Rscript slampy_halflife_bed
+    * halflife directories contains output of Rscripts
         - ConvRate_processed.tsv : Conversion Rates table of each sample and
             replicate, normalized to time-point 0h and background substracted
             when no4su samples are provided
         - halflife_unfiltered.csv : selected halflife between the 3 models
             half-life were not filtered meaning abberant half-life are present
+            OR here only model 1 hal-lifes
         - model_fitting_summary.txt : summary of half-life below 0h or above
             the max time-point
+            OR NOT if only model 1
+        - models_halflife_decay_aic.tsv: result of all models if 3 models,
+            nothing if only model 1
         - bootstrap_halflife.tsv : bootstrapped half-lifes (iteration = 1000)
-            
-      It will maybe later output 
-        - halflife_filtered.tsv : filtered half-life (to be determined)
-            half life betweem -1 and 0 are replace by 0
-            haf life above 50h are filtered out
-        - .......
+        - halflife_percentileCIs.tsv : Pencentile CI calculated on bootstrapped
+            half-lifes, wth other stats like mean and median
+        - halflife_filtered.tsv : filtered half-lifes for h-l that were out
+        of the bs CI, < 0h or > 24h
+        - halflife_filtered.log : number of transcripts filtered
 
 See each function for an explanation of each job ran
 See slamdunk documentation for more details on slamdunk and alleyoop functions:
@@ -129,15 +132,15 @@ PARAMS = P.get_parameters(
      "pipeline.yml"])
 ########################
 
-SAMPLES = [P.snip(f, ".fastq.gz") for f in glob.glob("*.fastq.gz")]
+#SAMPLES = [P.snip(f, ".fastq.gz") for f in glob.glob("*R[0-9].fastq.gz")]
 
-@transform("*.fastq.gz",
-           regex("(.+).fastq.gz"),
-           r"\1_processed.fastq")
+@transform("*R[0-9].fastq.gz",
+           regex("(trimmed-[a-zA-Z0-9_]+-[a-zA-Z0-9_]+-R[0-9]).fastq.gz"),
+           r"\1_processed.fastq.gz")
 def umi_extract(infile, outfile):
     '''Moves the UMI from the read to the read name'''
     n_threads = PARAMS["number_of_threads"]
-    log_file = P.snip(outfile, ".fastq")+".log"
+    log_file = P.snip(outfile, ".fastq.gz")+".log"
     job_memory="8G"
     statement = '''
     umi_tools extract --stdin=%(infile)s --bc-pattern=NNNNNN --log=%(log_file)s --stdout %(outfile)s
@@ -151,29 +154,29 @@ def make_conf(outfile, list_samples, pattern):
     1. Filename
     2. Sample name. This is currently the filename with the .fastq removed
     3. is "chase"
-    4. time point in minutes. This is retreived from the file anme assuming trimmed-[A-Za-z]-(.+)h-R[0-9]_processed.fastq'''
+    4. time point in minutes. This is retreived from the file anme assuming trimmed-[a-zA-Z0-9_]+-[a-zA-Z0-9_]-R[0-9]_processed.fastq.gz'''
 
     with open(outfile, 'w', newline='') as f_output:
         tsv_output = csv.writer(f_output, delimiter='\t')
         for i in list_samples:
             samples_grouping = re.search(pattern,i)
             if samples_grouping is None:
-                tsv_output.writerow((i, i[:-6], "chase", 0))
+                tsv_output.writerow((i, i[:-9], "chase", 10000))
             else:
-                tsv_output.writerow((i, i[:-6], "chase", float(samples_grouping.groups()[0]) * 60))
+                tsv_output.writerow((i, i[:-9], "chase", float(samples_grouping.groups()[0]) * 60))
 
 @follows(umi_extract)
 @originate("sample_description.tsv")
 def make_config_file(outfile):
     '''Takes the reads input names and outputs them to a tsv of filenames for slamdunk dunks'''
-    list_samples = glob.glob('*_processed.fastq')
-    pattern = "trimmed-[A-Za-z0-9]+-(.+)h-R[0-9]_processed.fastq"
+    list_samples = glob.glob('*_processed.fastq.gz')
+    pattern = "trimmed-[A-Za-z0-9]+-(.+)h-R[0-9]_processed.fastq.gz"
     make_conf(outfile, list_samples, pattern)
 
 
 @follows(mkdir("map"))
 @split([make_config_file,umi_extract],
-       ["map/{}_processed_slamdunk_mapped.bam".format(P.snip(sample, ".fastq.gz")) for sample in glob.glob("*.fastq.gz")])
+       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".gz")) for sample in glob.glob("*-R[0-9]_processed.fastq.gz")])
 def slamdunk_map(infiles, outfiles):
     '''slamdunk map dunk'''
     infiles = infiles[0]
@@ -197,8 +200,23 @@ def slamdunk_map(infiles, outfiles):
           job_memory= job_memory,
           job_threads=n_threads)
 
-@follows(mkdir("filter"))
+
 @transform(slamdunk_map,
+           regex("map/(.+).fastq_slamdunk_mapped.bam"),
+           r"map/\1_slamdunk_mapped.bam")
+def output_naming(infiles, outfiles):
+    '''renaming cause slamdunk automatically map leaves the fastq in name'''
+    statement = '''
+    mv %(infiles)s %(outfiles)s
+    '''
+    P.run(statement,
+          job_memory= "2G",
+          job_threads=1)
+
+
+
+@follows(mkdir("filter"))
+@transform(output_naming,
            regex("map/(.+)_slamdunk_mapped.bam"),
            r"filter/\1_slamdunk_mapped_filtered.bam")
 def slamdunk_filter(infiles, outfiles):
@@ -382,28 +400,56 @@ def slamdunk_summary(infile,outfile):
     '''
     P.run(statement)
 
-@follows(mkdir("halflife"))
+@follows(mkdir("halflife_allrep_aboveCPM"))
 @merge(slamdunk_count,
-       r"halflife/halflife_filtered.tsv")
-def run_curvefit(infile, outfile):
+       r"halflife_allrep_aboveCPM/halflife_filtered.tsv")
+def run_curvefit_model1_all_above_CPM(infile, outfile):
     '''From slamdunk count files:
     - computes half lifes
-    - boostrap half-life
-    (more coming)'''
+    - boostrap half-lifes and calculates Pencentile CI on bs h-l'''
     cdir = os.getcwd()+"/count"
     threshold = PARAMS["cpm_threshold"]
     bg_sub = PARAMS["background"]
-    out_dir = os.getcwd()+"/halflife"
+    out_dir = os.getcwd()+"/halflife_allrep_aboveCPM"
     script_path = os.path.join((os.path.dirname(__file__)),
                                "Rscripts",
-                               "slampy_halflife_bed.R")
+                               "slampy_halflife_allrep_aboveCPM_model1.R")
+    n_threads = PARAMS["number_of_threads"]
     statement = '''Rscript %(script_path)s
                          --count-directory %(cdir)s
                          --output-directory %(out_dir)s
                          --cpm--threshold %(threshold)s
                          --background %(bg_sub)s'''
     P.run(statement,
-          job_memory="8G")
+          job_memory="4G",
+          job_threads=n_threads)
+
+
+@follows(mkdir("halflife_2rep_aboveCPM"))
+@merge(slamdunk_count,
+       r"halflife_2rep_aboveCPM/halflife_filtered.tsv")
+def run_curvefit_model1_2rep_above_CPM(infile, outfile):
+    '''From slamdunk count files:
+    - computes half lifes
+    - boostrap half-lifes and calculates Pencentile CI on bs h-l'''
+    cdir = os.getcwd()+"/count"
+    threshold = PARAMS["cpm_threshold"]
+    bg_sub = PARAMS["background"]
+    out_dir = os.getcwd()+"/halflife_2rep_aboveCPM"
+    script_path = os.path.join((os.path.dirname(__file__)),
+                               "Rscripts",
+                               "slampy_halflife_2rep_aboveCPM_model1.R")
+    n_threads = PARAMS["number_of_threads"]
+    statement = '''Rscript %(script_path)s
+                         --count-directory %(cdir)s
+                         --output-directory %(out_dir)s
+                         --cpm--threshold %(threshold)s
+                         --background %(bg_sub)s'''
+    P.run(statement,
+          job_memory="4G",
+          job_threads=n_threads)
+
+
 
 
 # @follows(mkdir("meme.dir"), run_curvefit)
@@ -432,7 +478,8 @@ def run_curvefit(infile, outfile):
 #     job_memory="4G",
 #     job_threads=2)
 
-@follows(merge_ConversionRate,merge_CPM,slamdunk_qc_rates,slamdunk_qc_utrrates,slamdunk_summary,run_curvefit)
+@follows(merge_ConversionRate,merge_CPM,slamdunk_qc_rates,slamdunk_qc_utrrates,
+slamdunk_summary,run_curvefit_model1_all_above_CPM, run_curvefit_model1_2rep_above_CPM)
 def full():
     '''Later alligator'''
     pass
