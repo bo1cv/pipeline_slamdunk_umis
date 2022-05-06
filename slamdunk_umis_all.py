@@ -176,7 +176,7 @@ def make_config_file(outfile):
 
 @follows(mkdir("map"))
 @split([make_config_file,umi_extract],
-       ["map/{}_slamdunk_mapped.bam".format(P.snip(sample, ".gz")) for sample in glob.glob("*-R[0-9]_processed.fastq.gz")])
+       ["map/{}_processed.fastq_slamdunk_mapped.bam".format(P.snip(sample, ".fastq.gz")) for sample in glob.glob("*-R[0-9].fastq.gz")])
 def slamdunk_map(infiles, outfiles):
     '''slamdunk map dunk'''
     infiles = infiles[0]
@@ -202,8 +202,8 @@ def slamdunk_map(infiles, outfiles):
 
 
 @transform(slamdunk_map,
-           regex("map/(.+).fastq_slamdunk_mapped.bam"),
-           r"map/\1_slamdunk_mapped.bam")
+           regex("map/(.+)_processed.fastq_slamdunk_mapped.bam"),
+           r"map/\1_processed_slamdunk_mapped.bam")
 def output_naming(infiles, outfiles):
     '''renaming cause slamdunk automatically map leaves the fastq in name'''
     statement = '''
