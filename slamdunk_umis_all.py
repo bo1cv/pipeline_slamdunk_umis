@@ -201,22 +201,8 @@ def slamdunk_map(infiles, outfiles):
           job_threads=n_threads)
 
 
-@transform(slamdunk_map,
-           regex("map/(.+)_processed.fastq_slamdunk_mapped.bam"),
-           r"map/\1_processed_slamdunk_mapped.bam")
-def output_naming(infiles, outfiles):
-    '''renaming cause slamdunk automatically map leaves the fastq in name'''
-    statement = '''
-    mv %(infiles)s %(outfiles)s
-    '''
-    P.run(statement,
-          job_memory= "2G",
-          job_threads=1)
-
-
-
 @follows(mkdir("filter"))
-@transform(output_naming,
+@transform(slamdunk_map,
            regex("map/(.+)_slamdunk_mapped.bam"),
            r"filter/\1_slamdunk_mapped_filtered.bam")
 def slamdunk_filter(infiles, outfiles):
@@ -395,7 +381,7 @@ def slamdunk_summary(infile,outfile):
     '''Basic statistics of the mapping process'''
     statement = '''
     alleyoop summary -o %(outfile)s
-                     -t /count
+                     -t count/
                      %(infile)s
     '''
     P.run(statement)
