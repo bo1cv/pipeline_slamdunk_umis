@@ -238,7 +238,7 @@ filtering <- rbind(total = nrow(halflife_bsCI),
                    below0h = below0)
 f2_halflife <-f2_halflife %>% separate(Coordinate, into = c("chr", "start", "end", "transcript_id", "length", "strand"), sep = "_", convert = T)
 write.table(f2_halflife, file = "halflife_filtered.tsv", quote = F, sep = "\t")
-write.table(filtering, file = "halflife_filtered.log", quote = F, sep = "\t", col.names = F, row.names = F)
+write.table(filtering, file = "halflife_filtered.log", quote = F, sep = "\t", col.names = F, row.names = T)
 
 # STREME ------------------------------------------------------------------
 

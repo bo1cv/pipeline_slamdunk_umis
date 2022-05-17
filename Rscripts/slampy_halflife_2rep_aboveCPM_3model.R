@@ -31,7 +31,7 @@ arguments <- parse_args(OptionParser(option_list = option_list))
 
 setwd(arguments$count_dir)
 
-# setwd("/mnt/sharc/fastdata/bo1cv/a549_slam/slam/count")
+# setwd("/mnt/sharc/shared/sudlab1/General/projects/SynthUTR_hepG2_a549/a549_slam/slam/count/")
 # setwd("/mnt/sharc/shared/sudlab1/General/projects/SLAMseq_CHO_Mikayla/cho_slam/slam_picr/count/")
 # arguments <- data.frame(cpm_cutoff = 1,
 #                         bg = 0)
@@ -59,6 +59,7 @@ filter_data$Coordinate <- NULL
 ###Keep only one with at least two rep with CPM > 1
 replicates = str_extract(colnames(filter_data), regex("(?<=-).+(?=h)")) %>% as.numeric() %>% unique()
 filter_cpm <- vector()
+
 for (y in 1:length(replicates)) {
   col_vec = select(filter_data, contains(paste0(replicates[y], "h")) ) %>% colnames()
 
@@ -296,7 +297,7 @@ bootstrapping_hl <- function(dataframe_ConvRate, timepoints) {
 dataframe_boostrap <- as.data.frame(ConvRate_rmbg_norm)
 
 #Parralel looping
-bootstrapped_halflifes <- foreach(i=1:1000, .combine=cbind) %dopar% {
+bootstrapped_halflifes <- foreach(i=1:10000, .combine=cbind) %dopar% {
   #Give libraries for job
   library(tidyverse)
   library("matrixStats")
@@ -329,11 +330,11 @@ bs_quantiles = apply(bs_halflife, 1, quantile, c(0.05,0.95))  %>%t()
 halflife_PbsCI <- merge(best_half, bs_quantiles, by.x = "id",by.y = 0)
 
 #Add means of bs
-halflife_bsCI$bs_mean <- apply(bs_halflife, 1, mean)
-halflife_bsCI$bs_median <- apply(bs_halflife, 1, median)
-halflife_bsCI$bs_sd <- apply(bs_halflife, 1, sd)
-halflife_bsCI$bs_Cofvar <- (halflife_bsCI$bs_sd / halflife_bsCI$bs_mean )*100
-names(halflife_bsCI)[1] <- "Coordinate"
+halflife_PbsCI$bs_mean <- apply(bs_halflife, 1, mean)
+halflife_PbsCI$bs_median <- apply(bs_halflife, 1, median)
+halflife_PbsCI$bs_sd <- apply(bs_halflife, 1, sd)
+halflife_PbsCI$bs_Cofvar <- (halflife_PbsCI$bs_sd / halflife_PbsCI$bs_mean )*100
+names(halflife_PbsCI)[1] <- "Coordinate"
 
 write.table(halflife_PbsCI, "halflife_percentileCIs.tsv", quote = F, sep = "\t")
 

@@ -311,11 +311,11 @@ bs_quantiles = apply(bs_halflife, 1, quantile, c(0.05,0.95))  %>%t()
 halflife_PbsCI <- merge(best_half, bs_quantiles, by.x = "id",by.y = 0)
 
 #Add means of bs
-halflife_bsCI$bs_mean <- apply(bs_halflife, 1, mean)
-halflife_bsCI$bs_median <- apply(bs_halflife, 1, median)
-halflife_bsCI$bs_sd <- apply(bs_halflife, 1, sd)
-halflife_bsCI$bs_Cofvar <- (halflife_bsCI$bs_sd / halflife_bsCI$bs_mean )*100
-names(halflife_bsCI)[1] <- "Coordinate"
+halflife_PbsCI$bs_mean <- apply(bs_halflife, 1, mean)
+halflife_PbsCI$bs_median <- apply(bs_halflife, 1, median)
+halflife_PbsCI$bs_sd <- apply(bs_halflife, 1, sd)
+halflife_PbsCI$bs_Cofvar <- (halflife_PbsCI$bs_sd / halflife_PbsCI$bs_mean )*100
+names(halflife_PbsCI)[1] <- "Coordinate"
 
 write.table(halflife_PbsCI, "halflife_percentileCIs.tsv", quote = F, sep = "\t")
 
