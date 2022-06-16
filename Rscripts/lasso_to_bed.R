@@ -79,6 +79,9 @@ final_data[,3:ncol(final_data)] <- scale(final_data[,3:ncol(final_data)])
                                list = F, times = 1)
   train_data<-   final_data[index,]
   test_data <- final_data[-index,]
+  
+  #Checking that training and testing don't share same transcripts
+  shared_transcript <- test_data[(test_data$transcript_id %in% train_data$transcript_id),]
 
   #Remove them from the testing, go to training
   test_data <- test_data[!(test_data$transcript_id %in% train_data$transcript_id),]
