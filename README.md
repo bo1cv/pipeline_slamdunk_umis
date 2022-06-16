@@ -74,6 +74,8 @@ On top of the default CGAT setup, the pipeline requires the following
    - stringr
    - foreach
    - doParallel
+* Python modules
+   - pyteiser (pip install) https://github.com/goodarzilab/pyteiser
 
 ## Configuration
 The pipeline requires a configured :file: `pipeline.yml` file.

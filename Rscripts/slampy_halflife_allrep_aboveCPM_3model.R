@@ -314,7 +314,7 @@ halflife_PbsCI <- merge(best_half, bs_quantiles, by.x = "id",by.y = 0)
 halflife_PbsCI$bs_mean <- apply(bs_halflife, 1, mean)
 halflife_PbsCI$bs_median <- apply(bs_halflife, 1, median)
 halflife_PbsCI$bs_sd <- apply(bs_halflife, 1, sd)
-halflife_PbsCI$bs_Cofvar <- (halflife_PbsCI$bs_sd / halflife_PbsCI$bs_mean )*100
+halflife_bsCI$CIinterval <- (halflife_bsCI$`95%` - halflife_bsCI$`5%`)
 names(halflife_PbsCI)[1] <- "Coordinate"
 
 write.table(halflife_PbsCI, "halflife_percentileCIs.tsv", quote = F, sep = "\t")
@@ -322,36 +322,36 @@ write.table(halflife_PbsCI, "halflife_percentileCIs.tsv", quote = F, sep = "\t")
 
 # Filtering ---------------------------------------------------------------
 
-out_halflife <- halflife_PbsCI[!(halflife_PbsCI$`5%` < halflife_PbsCI$halflife & halflife_PbsCI$`95%` > halflife_PbsCI$halflife) ,] %>% nrow()
+out_percentileCI <- halflife_bsCI[!(halflife_bsCI$`Percentile5%` < halflife_bsCI$halflife & halflife_bsCI$`Percentile95%` > halflife_bsCI$halflife) ,]
+out_paramCI <- halflife_bsCI[!(halflife_bsCI$`Param5%` < halflife_bsCI$halflife & halflife_bsCI$`Param95%` > halflife_bsCI$halflife) ,]
 
-f1_halflife <- halflife_PbsCI[(halflife_PbsCI$`5%` < halflife_PbsCI$halflife & halflife_PbsCI$`95%` > halflife_PbsCI$halflife) ,]
+shared <- length(out_percentileCI$Coordinate %in% out_paramCI$Coordinate)
 
-above24 <- halflife_PbsCI[halflife_PbsCI$halflife > 24,] %>% nrow()
+above24 <- halflife_bsCI[halflife_bsCI$halflife > 24,] %>% nrow()
 
-f2_halflife <- f1_halflife[(f1_halflife$halflife < 24 ) ,]
+below0 <- halflife_bsCI[halflife_bsCI$halflife < 0,] %>% nrow()
 
-below0 <- halflife_PbsCI[halflife_PbsCI$halflife < 0,] %>% nrow()
+#Filter out of 0h24h range
+f1_halflife <- halflife_bsCI[(halflife_bsCI$halflife < 24 & halflife_bsCI$halflife > 0) ,]
 
-f3_halflife <- f2_halflife[(f2_halflife$halflife < 24 ) ,]
+#Filter out of CI
+out_percentileCI_ok <- f1_halflife[!(f1_halflife$`Percentile5%` < f1_halflife$halflife & f1_halflife$`Percentile95%` > f1_halflife$halflife) ,]
+out_paramCI_ok <- f1_halflife[!(f1_halflife$`Param5%` < f1_halflife$halflife & f1_halflife$`Param95%` > f1_halflife$halflife) ,]
 
-filtering <- rbind(total = nrow(halflife_PbsCI),
-                   fileting = (out_halflife + above24 + below0),
-                   outofCI = out_halflife,
+f2_halflife <- f1_halflife[!(f1_halflife$Coordinate %in% out_paramCI$Coordinate) & !(f1_halflife$Coordinate %in% out_percentileCI$Coordinate)  ,]
+
+f3_halflife <- filter(f2_halflife, CIinterval < 24)
+
+filtering <- rbind(total = nrow(halflife_bsCI),
+                   filtering = nrow(halflife_bsCI) - nrow(f3_halflife),
                    above24h = above24,
-                   below0h = below0)
+                   outofPercentileCI = nrow(out_percentileCI),
+                   outofParamCI = nrow(out_paramCI),
+                   shared_between_CIs_methods = shared,
+                   filtered_outofCI = nrow(f1_halflife) - nrow(f2_halflife),
+                   below0h = below0,
+                   CIinterval_higher24h = nrow(f2_halflife) - nrow(f3_halflife),
+                   final = nrow(f3_halflife))
+f3_halflife <-f3_halflife %>% separate(Coordinate, into = c("chr", "start", "end", "transcript_id", "length", "strand"), sep = "_", convert = T)
 write.table(f3_halflife, file = "halflife_filtered.tsv", quote = F, sep = "\t")
-write.table(filtering, file = "halflife_filtered.log", quote = F, sep = "\t", col.names = F)
-
-
-# STREME ------------------------------------------------------------------
-
-#
-# ###Generate bed for streme
-# #Order them and select for bed file
-# best_half <- best_half[order(best_half$halflife),1:6]
-# #Take the 10% most stable and less stable
-# howmany <- (nrow(best_half) * 0.1) %>% round()
-# most_stable <- head(best_half, n = howmany)
-# less_stable <- tail(best_half, n = howmany)
-# write.table(most_stable, file = "most_stable.bed", quote = F, row.names = F, sep = "\t", col.names = F)
-# write.table(less_stable, file = "less_stable.bed", quote = F, row.names = F, sep = "\t", col.names = F)
+write.table(filtering, file = "halflife_filtered.log", quote = F, sep = "\t", col.names = F, row.names = T)

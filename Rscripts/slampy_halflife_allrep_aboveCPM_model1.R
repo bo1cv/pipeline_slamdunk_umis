@@ -205,7 +205,7 @@ halflife_bsCI$`Param95%` <-  halflife_bsCI[,"halflife"]  - dd[,1]
 halflife_bsCI$bs_mean <- apply(bs_halflife, 1, mean)
 halflife_bsCI$bs_median <- apply(bs_halflife, 1, median)
 halflife_bsCI$bs_sd <- apply(bs_halflife, 1, sd)
-halflife_bsCI$bs_Cofvar <- (halflife_bsCI$bs_sd / halflife_bsCI$bs_mean )*100
+halflife_bsCI$CIinterval <- (halflife_bsCI$`Param95%` - halflife_bsCI$`Param5%`)
 names(halflife_bsCI)[1] <- "Coordinate"
 
 write.table(halflife_bsCI, "halflife_percentileCIs.tsv", quote = F, sep = "\t", row.names = F)
@@ -221,34 +221,27 @@ above24 <- halflife_bsCI[halflife_bsCI$halflife > 24,] %>% nrow()
 
 below0 <- halflife_bsCI[halflife_bsCI$halflife < 0,] %>% nrow()
 
+#Filter out of 0h24h range
 f1_halflife <- halflife_bsCI[(halflife_bsCI$halflife < 24 & halflife_bsCI$halflife > 0) ,]
 
+#Filter out of CI
 out_percentileCI_ok <- f1_halflife[!(f1_halflife$`Percentile5%` < f1_halflife$halflife & f1_halflife$`Percentile95%` > f1_halflife$halflife) ,]
 out_paramCI_ok <- f1_halflife[!(f1_halflife$`Param5%` < f1_halflife$halflife & f1_halflife$`Param95%` > f1_halflife$halflife) ,]
-out <- nrow(out_percentileCI_ok) + nrow(out_paramCI_ok)
 
 f2_halflife <- f1_halflife[!(f1_halflife$Coordinate %in% out_paramCI$Coordinate) & !(f1_halflife$Coordinate %in% out_percentileCI$Coordinate)  ,]
 
+f3_halflife <- filter(f2_halflife, CIinterval < 24)
+
 filtering <- rbind(total = nrow(halflife_bsCI),
-                   filtering = nrow(halflife_bsCI) - nrow(f2_halflife),
+                   filtering = nrow(halflife_bsCI) - nrow(f3_halflife),
+                   above24h = above24,
                    outofPercentileCI = nrow(out_percentileCI),
                    outofParamCI = nrow(out_paramCI),
                    shared_between_CIs_methods = shared,
-                   above24h = above24,
-                   below0h = below0)
-f2_halflife <-f2_halflife %>% separate(Coordinate, into = c("chr", "start", "end", "transcript_id", "length", "strand"), sep = "_", convert = T)
-write.table(f2_halflife, file = "halflife_filtered.tsv", quote = F, sep = "\t")
+                   filtered_outofCI = nrow(f1_halflife) - nrow(f2_halflife),
+                   below0h = below0,
+                   CIinterval_higher24h = nrow(f2_halflife) - nrow(f3_halflife),
+                   final = nrow(f3_halflife))
+f3_halflife <-f3_halflife %>% separate(Coordinate, into = c("chr", "start", "end", "transcript_id", "length", "strand"), sep = "_", convert = T)
+write.table(f3_halflife, file = "halflife_filtered.tsv", quote = F, sep = "\t")
 write.table(filtering, file = "halflife_filtered.log", quote = F, sep = "\t", col.names = F, row.names = T)
-
-# STREME ------------------------------------------------------------------
-
-#
-# ###Generate bed for streme
-# #Order them and select for bed file
-# best_half <- best_half[order(best_half$halflife),1:6]
-# #Take the 10% most stable and less stable
-# howmany <- (nrow(best_half) * 0.1) %>% round()
-# most_stable <- head(best_half, n = howmany)
-# less_stable <- tail(best_half, n = howmany)
-# write.table(most_stable, file = "most_stable.bed", quote = F, row.names = F, sep = "\t", col.names = F)
-# write.table(less_stable, file = "less_stable.bed", quote = F, row.names = F, sep = "\t", col.names = F)
