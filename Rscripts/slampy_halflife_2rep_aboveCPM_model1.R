@@ -31,10 +31,10 @@ arguments <- parse_args(OptionParser(option_list = option_list))
 
 setwd(arguments$count_dir)
 
-setwd("/mnt/sharc/fastdata/bo1cv/a549_slam/slam/count")
-setwd("/mnt/sharc/shared/sudlab1/General/projects/SLAMseq_CHO_Mikayla/cho_slam/slam_picr/count/")
-arguments <- data.frame(cpm_cutoff = 1,
-                        bg = 1)
+#setwd("/mnt/sharc/fastdata/bo1cv/a549_slam/slam/count")
+#setwd("/mnt/sharc/shared/sudlab1/General/projects/SLAMseq_CHO_Mikayla/cho_slam/slam_picr/count/")
+#arguments <- data.frame(cpm_cutoff = 1,
+#                        bg = 1)
 
 
 # Create Filter ConversionRate table by CPM cut off -----------------------------------------------------------------
